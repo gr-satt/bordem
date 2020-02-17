@@ -76,9 +76,7 @@ alert(subj='example', msg='message')
 - for full list of endpoints visit `https://www.bitmex.com/api/explorer/`
 
 ## Other
-- hour(...)
-- minute(...)
-- second(...)
+- schedule(...)
 - alert(...)          `email alert - from address, gmail support only`
     
 ## Requirements
