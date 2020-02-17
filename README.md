@@ -1,70 +1,85 @@
-> Wrapper returns BitMEX OHLCV data, 150+ indicator values, interacts directly with BitMEX REST API and performs other trade related functions necessary to implement automated trading strategies.
-> Geared more towards those just getting beginning to automate trading strategies or those just starting out with python.
+> Wrapper that returns BitMEX XBTUSD OHLCV data, 150+ indicator values, interacts directly with BitMEX REST API and performs other trade related functions necessary to implement automated trading strategies.
+
+> Python 3.7+
 
 ## Example
 ```python
-from bordemwrapper import BitMEXData, BitMEXFunctions, TradeFunctions
+from bordemwrapper import Data, Trade
+from bordemwrapper import schedule, alert
 
-# return BitMEX hourly OHLCV data for the past 25 hours
-data = BitMEXData().get_ohlcv(symbol='XBTUSD', timeframe='1h', instances=25)
+# return BitMEX daily OHLCV data for the past 25 (instances) days
+data = Data().ohlcv(symbol='XBTUSD', timeframe='1d', instances=25)
 
-# return XBTUSD 20-period RSI values for the past 25 daily candles
-indicator = BitMEXData().get_indicator(symbol='XBTUSD', timeframe='1d', 
-                                       indicator='RSI', period=20, 
-                                       source='close', instances=25)
-                                       
+# return XBTUSD 14-period RSI values for the past 20 (instances) hourly candles
+# params: symbol, timeframe, instances, indicator, <indicator args>, <indicator kwargs>
+# args: 'close' arg converts to array of close values | 'open' 'high' 'low' 'close' 'volume'
+# call indicator_help to see needed args, kwargs
+indicator = Data().indicator('XBTUSD', '1h', 20, 'RSI', 'close', timeperiod=14)
+
+# indicator help - show params & output
+help_ = Data().indicator_help('STOCH')
+
 # return current price
-price = BitMEXFunctions().get_price(symbol='XBTUSD')
+price = Trade().price(symbol='XBTUSD')
+
+# set leverage - 2x on XBTUSD
+Trade().qty_update(lev=2, symbol='XBTUSD')
 
 # market order
-BitMEXFunctions().market_order(symbol='XBTUSD', qty=10)
+Trade().market(symbol='XBTUSD', qty=10)
 
-# bulk order: 10 (default amt) orders of 10 contracts every 1 percent above $10,000
-BitMEXFunctions().bulk_order(symbol='XBTUSD', qty=10, price=10000, offset=1)
+# bulk order: 10 (default amt) orders of 25 contracts every 1% above $10,000
+Trade().bulk(symbol='XBTUSD', qty=25, price=10000, offset=1)
 
 # handling multiple accounts
-BitMEXFunctions(api_key='Acct_1_Key', api_secret='Acct_2_Secret').limit_order(symbol='XBTUSD', qty=10, price=1000)
-BitMEXFunctions(api_key='Acct_2_Key', api_secret='Acct_2_Secret').limit_order(symbol='XBTUSD', qty=-1, price=1000)
+Trade(api_key='Acct_1_Key', api_secret='Acct_2_Secret')\
+        .limit(symbol='XBTUSD', qty=10, price=1000)
+Trade(api_key='Acct_2_Key', api_secret='Acct_2_Secret')\
+        .limit(symbol='XBTUSD', qty=-1, price=1000)
+
+# schedule - 9:30AM, 5:00PM
+schedule(9, 30, 0)
+schedule(17, 0, 0)
 
 # send email alert
-TradeFunctions().send_alert(subj='example', msg='message')
+alert(subj='example', msg='message')
 
 ```
 
 ## Features
-- OHLCV data for any BitMEX contract & BitMEX-supported timeframe
-- return 150+ technical indicator values
-- interact directly with BitMEX rest api to fetch balance, current price, open position, vwap, as well as create market, limit, and bulk orders (built-in functions)
+- OHLCV data for any BitMEX-support contract and timeframe
+- return 150+ technical indicator values (ta-lib)
+- interact directly with BitMEX rest api
 - main & testnet support
 - logging
 
 ## Methods
-### BitMEXData(...)
-- .get_ohlcv(...)
-- .get_indicator(...)       | full list here: `https://github.com/mrjbq7/ta-lib#supported-indicators-and-functions`
+### Data(...)
+- .ohlcv(...)
+- .indicator(...)       `full list here: https://github.com/mrjbq7/ta-lib#supported-indicators-and-functions`
+- .indicator_help(...)
 
-### BitMEXFunctions(...)
-- .get_balance()            | XBT quoted
-- .get_position()           | open position details
-- .get_xbt_price()
-- .get_xbt_vwap()
-- .market_order(...)
-- .limit_order(...)
-- .bulk_order(...)
-- .close(...)               | close open positions
-- .cancel_orders()
-- .balance_update()         | check/log balance
-- .qty_update(...)          | change leverage
+### Trade(...)
+- .balance()            `XBT quoted`
+- .position()           `open position details`
+- .price(...)
+- .market(...)
+- .limit(...)
+- .bulk(...)
+- .close(...)               `close open positions`
+- .cancel()
+- .balance_check()         `check/log balance`
+- .qty_update(...)          `change leverage`
 
 ### Other BitMEX Endpoints:
 - use cryptowrapper `https://github.com/xnr-k/cryptowrapper`
 - for full list of endpoints visit `https://www.bitmex.com/api/explorer/`
 
-### TradeFunctions()
-- .fetch_current_hr(...)
-- .fetch_current_min(...)
-- .fetch_current_sec(...)
-- .send_alert(...)          | email alert - from address, gmail support only
+## Other
+- hour(...)
+- minute(...)
+- second(...)
+- alert(...)          `email alert - from address, gmail support only`
     
 ## Requirements
 - pandas 
@@ -72,15 +87,16 @@ TradeFunctions().send_alert(subj='example', msg='message')
 - TA Lib `http://mrjbq7.github.io/ta-lib/install.html`
 - cryptowrapper `https://github.com/xnr-k/cryptowrapper`
 
-## TODO
-- more timeframes
-- strategy backtesting
-
 ## Setup
-- in `inputs` directory open `config.py` - enter email info & API keys
+- manage settings in `config.py`
 
-## Clone
-- Clone this repo to your local machine using `https://github.com/gr-satt/bordemwrapper`
+## Installation
+- git clone `https://github.com/gr-satt/bordemwrapper`
 
-## Requests / Contact
-- to request unsupported exhange, symbol, timeframe, etc. --> message --> `bordemxbt@protonmail.com`
+## TODO
+- expand supported timeframes
+- backtesting
+- gui
+
+## Contact
+- `bordemxbt@protonmail.com`
