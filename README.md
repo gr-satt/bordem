@@ -1,13 +1,22 @@
-> Wrapper that returns BitMEX XBTUSD OHLCV data, 150+ indicator values, interacts directly with BitMEX REST API and performs other trade related functions necessary to implement automated trading strategies.
+![Image of logo](https://i.imgur.com/Gvv27Mq.jpg)
+
+> Build automated trading strategies for BitMEX contracts.
+
+> Easily return BitMEX OHLCV data, 150+ indicator values.
+
+> Interacts directly with BitMEX REST API v1.
+
+> Main & Testnet support
 
 > Python 3.7+
 
-## Example
+## Usage
 ```python
 from bordemwrapper import Data, Trade
 from bordemwrapper import schedule, alert
 
 # return BitMEX daily OHLCV data for the past 25 (instances) days
+# timeframe options: 1m, 5m, 1h, 1d
 data = Data().ohlcv(symbol='XBTUSD', timeframe='1d', instances=25)
 
 # return XBTUSD 14-period RSI values for the past 20 (instances) hourly candles
@@ -30,6 +39,8 @@ Trade().market(symbol='XBTUSD', qty=10)
 
 # bulk order: 10 (default amt) orders of 25 contracts every 1% above $10,000
 Trade().bulk(symbol='XBTUSD', qty=25, price=10000, offset=1)
+# bulk order: 10 (default amt) orders of 25 contracts every 1% below $10,000
+Trade().bulk(symbol='XBTUSD', qty=25, price=10000, offset=-1)
 
 # handling multiple accounts
 Trade(api_key='Acct_1_Key', api_secret='Acct_2_Secret')\
@@ -38,6 +49,7 @@ Trade(api_key='Acct_2_Key', api_secret='Acct_2_Secret')\
         .limit(symbol='XBTUSD', qty=-1, price=1000)
 
 # schedule - 9:30AM, 5:00PM
+# sleep until given time
 schedule(9, 30, 0)
 schedule(17, 0, 0)
 
@@ -45,13 +57,6 @@ schedule(17, 0, 0)
 alert(subj='example', msg='message')
 
 ```
-
-## Features
-- OHLCV data for any BitMEX-support contract and timeframe
-- return 150+ technical indicator values (ta-lib)
-- interact directly with BitMEX rest api
-- main & testnet support
-- logging
 
 ## Methods
 ### Data(...)
@@ -62,39 +67,15 @@ alert(subj='example', msg='message')
 ### Trade(...)
 - .balance()            `XBT quoted`
 - .position()           `open position details`
-- .price(...)
-- .market(...)
-- .limit(...)
-- .bulk(...)
-- .close(...)               `close open positions`
-- .cancel()
-- .balance_check()         `check/log balance`
-- .qty_update(...)          `change leverage`
+- .price(...)           `current contract price`
+- .market(...)          `market order`
+- .limit(...)           `limit order`
+- .bulk(...)            `order staggering`
+- .close(...)           `close open positions`
+- .cancel()             `cancel open order(s)`
+- .balance_check()      `check/log balance`
+- .qty_update(...)      `change leverage`
 
-### Other BitMEX Endpoints:
-- use cryptowrapper `https://github.com/xnr-k/cryptowrapper`
-- for full list of endpoints visit `https://www.bitmex.com/api/explorer/`
-
-## Other
+### Other
 - schedule(...)
-- alert(...)          `email alert - from address, gmail support only`
-    
-## Requirements
-- pandas 
-- numpy
-- TA Lib `http://mrjbq7.github.io/ta-lib/install.html`
-- cryptowrapper `https://github.com/xnr-k/cryptowrapper`
-
-## Setup
-- manage settings in `config.py`
-
-## Installation
-- git clone `https://github.com/gr-satt/bordemwrapper`
-
-## TODO
-- expand supported timeframes
-- backtesting
-- gui
-
-## Contact
-- `bordemxbt@protonmail.com`
+- alert(...)            `email alert - from address, gmail support only`

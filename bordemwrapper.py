@@ -2,27 +2,23 @@ import logging
 from datetime import datetime
 import json
 import smtplib
-import sys
 import time
 
 import numpy as np
 import pandas as pd
 import talib as ta
-from cryptowrapper import BitMEX
 
 import config
+from bitmex_request import BitMEX
 
 
 '''bordemwrapper 
 gr-satt
-
-build automated trading strategies
-for BitMEX contracts
 '''
 
 
-# cryptowrapper functions are generated dynamically.
-# they only exist after class object is initiated.
+# BitMEX functions are generated dynamically.
+# they exist after class object is initiated.
 # linter won't recognize them.
 #
 # work-around:
@@ -30,40 +26,28 @@ for BitMEX contracts
 # pylint: disable=E1101
 
 
-if config.log:
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s:%(name)s:%(message)s')
-    handler = logging.FileHandler(filename='log.log', mode='a')        # `filename` may need path
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+# logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s:%(name)s:%(message)s')
+handler = logging.FileHandler(filename='log.log', mode='a')        # `filename` may need path
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 class Data:
     '''ohlcv & indicator data'''
     def __init__(
             self, api_key: str = config.apiKey,
-            api_secret: str = config.apiSecret,
-            max_retries: int = 3, retry_time: int = 3,
-            request_timeout: int = 10):
+            api_secret: str = config.apiSecret):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.max_retries = max_retries
-        self.retry_time = retry_time
-        self.request_timeout = request_timeout
 
-    def _initiate_request(self):
-        bitmex = BitMEX(api_key=self.api_key, api_secret=self.api_secret,
-                max_retries=self.max_retries, retry_time=self.retry_time,
-                request_timeout=self.request_timeout)
-        bitmex.BASE_URL = 'https://www.bitmex.com/api/v1'
-        if config.test:
-            bitmex.BASE_URL = 'https://testnet.bitmex.com/api/v1'
-        return bitmex
+        self.bitmex = BitMEX(api_key=self.api_key, api_secret=self.api_secret)
 
     def ohlcv(self, symbol: str = None, timeframe: str = None, instances: int = 0, reverse: bool = False):
-        bitmex = self._initiate_request()
-        request = bitmex.trade_bucketed_GET(
+        '''timeframes: 1m, 5m, 1h, 1d'''
+        request = self.bitmex.trade_bucketed_GET(
                 binSize=timeframe, partial=True, symbol=symbol,
                 count=instances, reverse=reverse)
                 
@@ -87,8 +71,9 @@ class Data:
         data = self.ohlcv(symbol=symbol, timeframe=timeframe, instances=instances+max_)
         data = data.iloc[::-1]
 
-        # convert header (string) to numpy array of its values from dataframe
-        # i.e. 'close' arg converts to array of close values 
+        # convert header (str) to numpy array of its values from dataframe
+        # i.e. 'close' arg converts to array of close values
+        # 'open' 'high' 'low' 'close' 'volume'
         args = list(args)
         for i, arg in enumerate(args):
             try:
@@ -100,85 +85,64 @@ class Data:
         values = getattr(ta.func, indicator)(*args, **kwargs)
         return values[-instances:]
 
-    # all supported indicators:
-    # https://github.com/mrjbq7/ta-lib#supported-indicators-and-functions
+    # get help w/ params needed to call indicator method
     @staticmethod
     def indicator_help(indicator: str = None):
         if indicator not in ta.get_functions():
-            raise ValueError(f'{indicator} is not supported')
+            raise ValueError(
+                f'{indicator} is not supported\n'
+                'https://github.com/mrjbq7/ta-lib#supported-indicators-and-functions'
+            )
         help(getattr(ta.func, indicator))
 
 class Trade:
     '''bitmex api functions'''
     def __init__(
-            self, api_key: str = config.apiKey,
-            api_secret: str = config.apiSecret,
-            max_retries: int = 3, retry_time: int = 3,
-            request_timeout: int = 10):
+            self, api_key: str =config.apiKey,
+            api_secret: str = config.apiSecret):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.max_retries = max_retries
-        self.retry_time = retry_time
-        self.request_timeout = request_timeout
 
-    def _initiate_request(self):
-        bitmex = BitMEX(api_key=self.api_key, api_secret=self.api_secret,
-                max_retries=self.max_retries, retry_time=self.retry_time,
-                request_timeout=self.request_timeout)
-        bitmex.BASE_URL = 'https://www.bitmex.com/api/v1'
-        if config.test:
-            bitmex.BASE_URL = 'https://testnet.bitmex.com/api/v1'
-        return bitmex
+        self.bitmex = BitMEX(api_key=self.api_key, api_secret=self.api_secret)
 
     def balance(self):
         '''account balance in btc'''
-        bitmex = self._initiate_request()
-        balance = bitmex.user_wallet_GET()['amount'] / 100000000
-        if config.log:
-            logger.info(f'{self.balance.__name__}: {balance}')
-        return balance
+        bal = self.bitmex.user_wallet_GET()['amount'] / 100000000
+        logger.info(f'{self.balance.__name__}: {bal}')
+        return bal
 
     def position(self):
         '''open position amt'''
-        bitmex = self._initiate_request()
-        open_qty = bitmex.position_GET()[0]['currentQty']
-        if config.log:
-            logger.info(f'{self.position.__name__}: {open_qty}')
+        open_qty = self.bitmex.position_GET()[0]['currentQty']
+        logger.info(f'{self.position.__name__}: {open_qty}')
         return open_qty
 
     def price(self, symbol: str = 'XBTUSD'):
         '''contract current price'''
-        bitmex = self._initiate_request()
-        response = bitmex.instrument_GET()
+        response = self.bitmex.instrument_GET()
         for contract in response:
             if contract['symbol'] == symbol:
                 price = contract['lastPrice']
-                if config.log:
-                    logger.info(f'{symbol} {self.price.__name__}: {price}')
+                logger.info(f'{symbol} {self.price.__name__}: {price}')
                 return price
-        raise ValueError(f'could not find {symbol} contract')
+        raise ValueError(f'{symbol}')
 
     def market(self, symbol: str = None, qty: int = 0):
         '''market order'''
-        bitmex = self._initiate_request()
-        mkt = bitmex.order_POST(symbol=symbol, orderQty=qty, type='Market')
-        if config.log:
-            logger.info(f'{self.market.__name__}: {mkt}')
+        mkt = self.bitmex.order_POST(symbol=symbol, orderQty=qty, type='Market')
+        logger.info(f'{self.market.__name__}: {mkt}')
         return mkt
 
     def limit(self, symbol: str = None, qty: int = 0, price: int = None):
         '''limit order'''
-        bitmex = self._initiate_request()
-        lmt = bitmex.order_POST(
+        lmt = self.bitmex.order_POST(
             symbol=symbol, orderQty=qty, price=price, type='Limit')
-        if config.log:
-            logger.info(f'{self.limit.__name__}: {lmt}')
+        logger.info(f'{self.limit.__name__}: {lmt}')
         return lmt
 
     def bulk(self, symbol: str = None, qty: int = 0, price: int = None, offset: int = 0):
         '''bulk order: qty: per order | starting price | offset: % b/t each order'''
-        bitmex = self._initiate_request()
-        bulk = bitmex.order_bulk_POST(
+        bulk = self.bitmex.order_bulk_POST(
             orders=json.dumps([{'symbol': symbol, 'orderQty': qty,
                                 'price': price, 'type': 'Limit'},
                                {'symbol': symbol, 'orderQty': qty,
@@ -208,47 +172,41 @@ class Trade:
                                {'symbol': symbol, 'orderQty': qty,
                                 'price': (price * (1 + ((offset / 100) * 9))),
                                 'type': 'Limit'},]),)
-        if config.log:
-            logger.info(f'{self.bulk.__name__}: {bulk}')
+        logger.info(f'{self.bulk.__name__}: {bulk}')
         return bulk
 
     def close(self, symbol: str = None):
         '''close position'''
-        bitmex = self._initiate_request()
-        close = bitmex.order_POST(symbol=symbol, execInst='Close')
-        if config.log:
-            logger.info(f'{self.close.__name__}: {close}')
+        close = self.bitmex.order_POST(symbol=symbol, execInst='Close')
+        logger.info(f'{self.close.__name__}: {close}')
         return close
 
     def cancel(self):
         '''cancel all open orders'''
-        bitmex = self._initiate_request()
-        cancel = bitmex.order_all_DELETE()
-        if config.log:
-            logger.info(f'{self.cancel.__name__}: {cancel}')
+        cancel = self.bitmex.order_all_DELETE()
+        logger.info(f'{self.cancel.__name__}: {cancel}')
         return cancel
 
     def balance_check(self):
-        '''check & log balance / failsafe check'''
+        '''log account balance & failsafe check'''
         balance = self.get_balance()
-        if config.log:
-            logger.info(f'balance: {balance}')
+        logger.info(f'balance: {balance}')
 
         # minimum balance failsafe
         if balance < config.fail_safe_amount:
             self.close()
             self.cancel_orders()
-            if config.log:
-                logger.info(f'failsafe: {balance} < {config.fail_safe_amount}')
-            exit('FAILSAFE')
-        else:
-            pass
+            try:
+                alert('FAILSAFE', f'failsafe: {balance} < {config.fail_safe_amount}')
+            except:
+                pass
+            logger.info(f'failsafe: {balance} < {config.fail_safe_amount}')
+            raise SystemExit
 
     def qty_update(self, lev: int = 1, symbol: str = 'XBTUSD'):
         '''set order qty / leverage'''
         qty = int(self.get_balance() * self.get_price(symbol) * lev)
-        if config.log:
-            logger.info(f'{self.qty_update.__name__}: {qty}')
+        logger.info(f'{self.qty_update.__name__}: {qty}')
         return qty
 
 
